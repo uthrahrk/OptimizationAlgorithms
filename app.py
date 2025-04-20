@@ -542,6 +542,14 @@ def filter_datasets_by_size(dataset_files, size_category):
 def perform_statistical_analysis(results_df):
     st.subheader("🧪 Statistical Validation")
     
+    # Ensure numeric data types for the metrics
+    results_df['Makespan'] = pd.to_numeric(results_df['Makespan'], errors='coerce')
+    results_df['Runtime (s)'] = pd.to_numeric(results_df['Runtime (s)'], errors='coerce')
+    results_df['Total Cost (₹)'] = pd.to_numeric(results_df['Total Cost (₹)'], errors='coerce')
+    
+    # Drop any rows with missing values
+    results_df = results_df.dropna(subset=['Makespan', 'Runtime (s)', 'Total Cost (₹)'])
+    
     # Prepare data
     algorithms = results_df['Algorithm'].unique()
     metrics = ['Makespan', 'Runtime (s)', 'Total Cost (₹)']
@@ -552,7 +560,7 @@ def perform_statistical_analysis(results_df):
     with tab1:
         st.write("### Makespan Comparison")
         # ANOVA test for makespan
-        groups = [results_df[results_df['Algorithm']==algo]['Makespan'] for algo in algorithms]
+        groups = [results_df[results_df['Algorithm']==algo]['Makespan'].values for algo in algorithms]
         f_val, p_val = f_oneway(*groups)
         
         st.write(f"**ANOVA Test:** F-value = {f_val:.3f}, p-value = {p_val:.4f}")
@@ -561,18 +569,86 @@ def perform_statistical_analysis(results_df):
             
             # Post-hoc pairwise comparisons
             st.write("**Pairwise Comparisons (Tukey HSD):**")
-            tukey = pairwise_tukeyhsd(results_df['Makespan'], results_df['Algorithm'])
-            st.text(str(tukey))
+            try:
+                tukey = pairwise_tukeyhsd(
+                    endog=results_df['Makespan'].values,
+                    groups=results_df['Algorithm'].values,
+                    alpha=0.05
+                )
+                st.text(str(tukey))
+                
+                # Plot the results
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=tukey.groupsunique,
+                    y=tukey.meandiffs,
+                    error_y=dict(
+                        type='data',
+                        array=tukey.confint[:, 1] - tukey.meandiffs,
+                        arrayminus=tukey.meandiffs - tukey.confint[:, 0],
+                        visible=True
+                    ),
+                    mode='markers'
+                ))
+                fig.update_layout(
+                    title="Tukey HSD Test Results",
+                    xaxis_title="Algorithm",
+                    yaxis_title="Mean Difference",
+                    showlegend=False
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Could not perform Tukey HSD test: {str(e)}")
         else:
             st.warning("No significant differences found between algorithms")
     
     with tab2:
         st.write("### Runtime Comparison")
-        # Similar analysis for runtime...
+        # ANOVA test for runtime
+        groups = [results_df[results_df['Algorithm']==algo]['Runtime (s)'].values for algo in algorithms]
+        f_val, p_val = f_oneway(*groups)
+        
+        st.write(f"**ANOVA Test:** F-value = {f_val:.3f}, p-value = {p_val:.4f}")
+        if p_val < 0.05:
+            st.success("Significant differences exist between algorithms (p < 0.05)")
+            
+            # Post-hoc pairwise comparisons
+            st.write("**Pairwise Comparisons (Tukey HSD):**")
+            try:
+                tukey = pairwise_tukeyhsd(
+                    endog=results_df['Runtime (s)'].values,
+                    groups=results_df['Algorithm'].values,
+                    alpha=0.05
+                )
+                st.text(str(tukey))
+            except Exception as e:
+                st.error(f"Could not perform Tukey HSD test: {str(e)}")
+        else:
+            st.warning("No significant differences found between algorithms")
     
     with tab3:
         st.write("### Cost Comparison") 
-        # Similar analysis for costs...
+        # ANOVA test for cost
+        groups = [results_df[results_df['Algorithm']==algo]['Total Cost (₹)'].values for algo in algorithms]
+        f_val, p_val = f_oneway(*groups)
+        
+        st.write(f"**ANOVA Test:** F-value = {f_val:.3f}, p-value = {p_val:.4f}")
+        if p_val < 0.05:
+            st.success("Significant differences exist between algorithms (p < 0.05)")
+            
+            # Post-hoc pairwise comparisons
+            st.write("**Pairwise Comparisons (Tukey HSD):**")
+            try:
+                tukey = pairwise_tukeyhsd(
+                    endog=results_df['Total Cost (₹)'].values,
+                    groups=results_df['Algorithm'].values,
+                    alpha=0.05
+                )
+                st.text(str(tukey))
+            except Exception as e:
+                st.error(f"Could not perform Tukey HSD test: {str(e)}")
+        else:
+            st.warning("No significant differences found between algorithms")
 
     # Add algorithm ranking
     st.write("### Algorithm Ranking")
